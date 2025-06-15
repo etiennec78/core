@@ -2,21 +2,40 @@
 
 import logging
 
+from google.api_core.client_options import ClientOptions
+from google.maps.routing_v2 import RoutesAsyncClient
+
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_TIME
+from .const import CONF_DESTINATION, CONF_ORIGIN, CONF_TIME
+from .coordinator import GoogleTravelTimeCoordinator
 
 PLATFORMS = [Platform.SENSOR]
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up Google Maps Travel Time from a config entry."""
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    api_key = config_entry.data[CONF_API_KEY]
+    origin = config_entry.data[CONF_ORIGIN]
+    destination = config_entry.data[CONF_DESTINATION]
+
+    client_options = ClientOptions(api_key=api_key)
+    client = RoutesAsyncClient(client_options=client_options)
+
+    coordinator = GoogleTravelTimeCoordinator(
+        hass, config_entry, origin, destination, client
+    )
+    config_entry.runtime_data = coordinator
+
+    await coordinator.async_config_entry_first_refresh()
+
+    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+
     return True
 
 
