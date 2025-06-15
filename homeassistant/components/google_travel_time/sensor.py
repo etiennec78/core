@@ -84,6 +84,7 @@ class GoogleTravelTimeSensor(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, config_entry.data[CONF_API_KEY])},
             name=name,
+            manufacturer="Google Inc.",
         )
         self._config_entry = config_entry
 
