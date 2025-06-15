@@ -1,21 +1,47 @@
 """Support for Google travel time sensors."""
 
-from typing import Any
-
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_API_KEY, CONF_NAME, UnitOfTime
+from homeassistant.const import CONF_API_KEY, CONF_MODE, CONF_NAME, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ATTRIBUTION, DEFAULT_NAME, DOMAIN
+from .const import (
+    ATTR_DISTANCE,
+    ATTR_DURATION,
+    ATTRIBUTION,
+    DEFAULT_NAME,
+    DOMAIN,
+    ICON_DRIVING,
+    ICONS,
+)
 from .coordinator import GoogleTravelTimeCoordinator
+
+
+def sensor_descriptions(travel_mode: str) -> tuple[SensorEntityDescription, ...]:
+    """Construct SensorEntityDescriptions."""
+    return (
+        SensorEntityDescription(
+            translation_key="duration",
+            icon=ICONS.get(travel_mode, ICON_DRIVING),
+            key=ATTR_DURATION,
+            state_class=SensorStateClass.MEASUREMENT,
+            device_class=SensorDeviceClass.DURATION,
+            native_unit_of_measurement=UnitOfTime.MINUTES,
+        ),
+        SensorEntityDescription(
+            translation_key="distance",
+            icon=ICONS.get(travel_mode, ICON_DRIVING),
+            key=ATTR_DISTANCE,
+        ),
+    )
 
 
 async def async_setup_entry(
@@ -27,9 +53,12 @@ async def async_setup_entry(
     name = config_entry.data.get(CONF_NAME, DEFAULT_NAME)
     coordinator = config_entry.runtime_data
 
-    sensor = GoogleTravelTimeSensor(config_entry, name, coordinator)
+    sensors: list[GoogleTravelTimeSensor] = [
+        GoogleTravelTimeSensor(config_entry, name, sensor_description, coordinator)
+        for sensor_description in sensor_descriptions(config_entry.options[CONF_MODE])
+    ]
 
-    async_add_entities([sensor], False)
+    async_add_entities(sensors, False)
 
 
 class GoogleTravelTimeSensor(
@@ -38,24 +67,23 @@ class GoogleTravelTimeSensor(
     """Representation of a Google travel time sensor."""
 
     _attr_attribution = ATTRIBUTION
-    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
-    _attr_device_class = SensorDeviceClass.DURATION
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_has_entity_name = True
 
     def __init__(
         self,
         config_entry: ConfigEntry,
         name: str,
+        sensor_description: SensorEntityDescription,
         coordinator: GoogleTravelTimeCoordinator,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self._attr_name = name
-        self._attr_unique_id = config_entry.entry_id
+        self.entity_description = sensor_description
+        self._attr_unique_id = f"{config_entry.entry_id}_{sensor_description.key}"
         self._attr_device_info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, config_entry.data[CONF_API_KEY])},
-            name=DOMAIN,
+            name=name,
         )
         self._config_entry = config_entry
 
@@ -67,23 +95,14 @@ class GoogleTravelTimeSensor(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+
         if self.coordinator.data is not None:
-            self._attr_native_value = round(self.coordinator.data.duration.seconds / 60)
+            if self.entity_description.key == ATTR_DURATION:
+                self._attr_native_value = round(
+                    self.coordinator.data.duration.seconds / 60
+                )
+            elif self.entity_description.key == ATTR_DISTANCE:
+                self._attr_native_value = (
+                    self.coordinator.data.localized_values.distance.text
+                )
             self.async_write_ha_state()
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return the state attributes."""
-        if self.coordinator.data is None:
-            return None
-
-        result = self._config_entry.options.copy()
-        result["duration_in_traffic"] = (
-            self.coordinator.data.localized_values.duration.text
-        )
-        result["duration"] = self.coordinator.data.localized_values.static_duration.text
-        result["distance"] = self.coordinator.data.localized_values.distance.text
-
-        result["origin"] = self.coordinator.resolved_origin
-        result["destination"] = self.coordinator.resolved_destination
-        return result

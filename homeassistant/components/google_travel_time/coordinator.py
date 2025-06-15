@@ -94,8 +94,8 @@ class GoogleTravelTimeCoordinator(DataUpdateCoordinator[Route]):
         self._config_entry = config_entry
         self._origin = origin
         self._destination = destination
-        self.resolved_origin: str | None = None
-        self.resolved_destination: str | None = None
+        self._resolved_origin: str | None = None
+        self._resolved_destination: str | None = None
 
     async def _async_update_data(self) -> Route:
         """Get the latest data from Google."""
@@ -164,20 +164,20 @@ class GoogleTravelTimeCoordinator(DataUpdateCoordinator[Route]):
         ) is not None:
             language = options_language
 
-        self.resolved_origin = find_coordinates(self.hass, self._origin)
-        self.resolved_destination = find_coordinates(self.hass, self._destination)
+        self._resolved_origin = find_coordinates(self.hass, self._origin)
+        self._resolved_destination = find_coordinates(self.hass, self._destination)
         _LOGGER.debug(
             "Getting update for origin: %s destination: %s",
-            self.resolved_origin,
-            self.resolved_destination,
+            self._resolved_origin,
+            self._resolved_destination,
         )
 
-        if self.resolved_destination is None or self.resolved_origin is None:
+        if self._resolved_destination is None or self._resolved_origin is None:
             raise UpdateFailed("Could not resolve origin or destination coordinates.")
 
         request = ComputeRoutesRequest(
-            origin=convert_to_waypoint(self.hass, self.resolved_origin),
-            destination=convert_to_waypoint(self.hass, self.resolved_destination),
+            origin=convert_to_waypoint(self.hass, self._resolved_origin),
+            destination=convert_to_waypoint(self.hass, self._resolved_destination),
             travel_mode=travel_mode,
             routing_preference=routing_preference,
             departure_time=departure_time,
