@@ -34,7 +34,7 @@ def sensor_descriptions(travel_mode: str) -> tuple[SensorEntityDescription, ...]
             key=ATTR_DURATION,
             state_class=SensorStateClass.MEASUREMENT,
             device_class=SensorDeviceClass.DURATION,
-            native_unit_of_measurement=UnitOfTime.MINUTES,
+            native_unit_of_measurement=UnitOfTime.SECONDS,
         ),
         SensorEntityDescription(
             translation_key="distance",
@@ -99,9 +99,7 @@ class GoogleTravelTimeSensor(
 
         if self.coordinator.data is not None:
             if self.entity_description.key == ATTR_DURATION:
-                self._attr_native_value = round(
-                    self.coordinator.data.duration.seconds / 60
-                )
+                self._attr_native_value = self.coordinator.data.duration.seconds
             elif self.entity_description.key == ATTR_DISTANCE:
                 self._attr_native_value = (
                     self.coordinator.data.localized_values.distance.text
